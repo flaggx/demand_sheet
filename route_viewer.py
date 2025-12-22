@@ -12,6 +12,9 @@ from pathlib import Path
 from datetime import datetime
 import webbrowser
 import tempfile
+import urllib.request
+import re
+import json
 
 
 class RouteViewerApp:
@@ -22,6 +25,8 @@ class RouteViewerApp:
         
         self.data = None
         self.filtered_data = None
+        self.favorites = {}  # Dictionary: alias -> path/URL
+        self.favorites_file = Path.home() / ".demand_sheet_favorites.json"
         
         self.setup_ui()
         
@@ -36,14 +41,32 @@ class RouteViewerApp:
         main_frame.columnconfigure(1, weight=1)
         
         # File selection
-        ttk.Label(main_frame, text="Excel File:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Excel File or Google Sheets URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.file_path = tk.StringVar()
         file_frame = ttk.Frame(main_frame)
         file_frame.grid(row=0, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         file_frame.columnconfigure(0, weight=1)
-        ttk.Entry(file_frame, textvariable=self.file_path, state="readonly").grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        file_entry = ttk.Entry(file_frame, textvariable=self.file_path)
+        file_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        file_entry.bind('<Return>', lambda e: self.load_from_path())
         ttk.Button(file_frame, text="Browse", command=self.browse_file).grid(row=0, column=1)
+        ttk.Button(file_frame, text="Load", command=self.load_from_path).grid(row=0, column=2, padx=(5, 0))
+
+        # Favorites section (saved file paths / URLs)
+        ttk.Label(file_frame, text="Favorites:").grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        self.favorites_var = tk.StringVar()
+        self.favorites_combo = ttk.Combobox(file_frame, textvariable=self.favorites_var, state="readonly", width=50)
+        self.favorites_combo.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
+        ttk.Button(file_frame, text="Load Favorite", command=self.load_selected_favorite).grid(row=1, column=2, padx=(5, 0), pady=(5, 0))
+        ttk.Label(file_frame, text="Alias:").grid(row=2, column=0, sticky=tk.W, pady=(5, 0))
+        self.favorite_alias_var = tk.StringVar()
+        ttk.Entry(file_frame, textvariable=self.favorite_alias_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(5, 5), pady=(5, 0))
+        ttk.Button(file_frame, text="Save as Favorite", command=self.save_current_to_favorites).grid(row=2, column=2, padx=(5, 0), pady=(5, 0))
+        ttk.Button(file_frame, text="Remove Favorite", command=self.remove_selected_favorite).grid(row=3, column=2, padx=(5, 0), pady=(5, 0))
         
+        # After file/favorites UI is built, load any saved favorites
+        self.load_favorites()
+
         # Filters section
         filter_frame = ttk.LabelFrame(main_frame, text="Filters", padding="10")
         filter_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
@@ -86,29 +109,15 @@ class RouteViewerApp:
         ttk.Button(button_frame, text="Print/Export", command=self.print_route).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Clear Filters", command=self.clear_filters).pack(side=tk.LEFT, padx=5)
         
-        # Data preview
-        preview_frame = ttk.LabelFrame(main_frame, text="Data Preview", padding="10")
-        preview_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=10)
-        preview_frame.columnconfigure(0, weight=1)
-        preview_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(3, weight=1)
+        # Data confirmation area
+        confirmation_frame = ttk.LabelFrame(main_frame, text="Sheet Status", padding="10")
+        confirmation_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        confirmation_frame.columnconfigure(0, weight=1)
         
-        # Treeview for data display
-        tree_frame = ttk.Frame(preview_frame)
-        tree_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        tree_frame.columnconfigure(0, weight=1)
-        tree_frame.rowconfigure(0, weight=1)
-        
-        scrollbar_y = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL)
-        scrollbar_x = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
-        
-        self.tree = ttk.Treeview(tree_frame, yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
-        scrollbar_y.config(command=self.tree.yview)
-        scrollbar_x.config(command=self.tree.xview)
-        
-        self.tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        scrollbar_y.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        scrollbar_x.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        self.confirmation_var = tk.StringVar(value="No data loaded")
+        confirmation_label = ttk.Label(confirmation_frame, textvariable=self.confirmation_var, 
+                                      font=('Arial', 10), foreground='#666666', wraplength=700)
+        confirmation_label.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
         
         # Status bar
         self.status_var = tk.StringVar(value="Ready - Please select an Excel file")
@@ -121,25 +130,230 @@ class RouteViewerApp:
         )
         if filename:
             self.file_path.set(filename)
-            self.load_data(filename)
+            self.load_from_path()
+
+    # ----- Favorites handling -----
+
+    def get_default_favorites(self):
+        """Return default favorites for new users"""
+        return {
+            "Main Sheet": ""  # User needs to set the URL/path
+        }
+    
+    def load_favorites(self):
+        """Load favorites from disk into memory and refresh the UI"""
+        try:
+            if self.favorites_file.exists():
+                with open(self.favorites_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # Handle migration from old list format to new dict format
+                if isinstance(data, list):
+                    # Convert old format: list of paths/URLs -> dict with paths as both key and value
+                    self.favorites = {path: path for path in data}
+                elif isinstance(data, dict):
+                    self.favorites = {str(k): str(v) for k, v in data.items()}
+                else:
+                    self.favorites = {}
+            else:
+                # File doesn't exist - initialize with defaults for new users
+                self.favorites = self.get_default_favorites()
+                self.save_favorites()
+        except Exception:
+            # If anything goes wrong, initialize with defaults
+            self.favorites = self.get_default_favorites()
+        
+        # If favorites dict is empty, initialize with defaults
+        if not self.favorites:
+            self.favorites = self.get_default_favorites()
+            self.save_favorites()
+        
+        self.refresh_favorites_ui()
+
+    def save_favorites(self):
+        """Persist favorites dictionary to disk"""
+        try:
+            with open(self.favorites_file, "w", encoding="utf-8") as f:
+                json.dump(self.favorites, f, indent=2)
+        except Exception as e:
+            messagebox.showwarning("Favorites", f"Failed to save favorites:\n{e}")
+
+    def refresh_favorites_ui(self):
+        """Update the favorites dropdown with current aliases"""
+        if hasattr(self, "favorites_combo"):
+            aliases = sorted(self.favorites.keys())
+            self.favorites_combo["values"] = aliases
+            # Keep selection if still valid
+            current = self.favorites_var.get()
+            if current in aliases:
+                self.favorites_combo.set(current)
+            elif aliases:
+                self.favorites_combo.set(aliases[0])
+            else:
+                self.favorites_combo.set("")
+
+    def save_current_to_favorites(self):
+        """Save current path/URL as a favorite with an alias"""
+        path_value = self.file_path.get().strip()
+        if not path_value:
+            messagebox.showwarning("Favorites", "Nothing to save. Enter a file path or URL first.")
+            return
+        
+        alias = self.favorite_alias_var.get().strip()
+        if not alias:
+            messagebox.showwarning("Favorites", "Please enter an alias/name for this favorite.")
+            return
+        
+        if alias in self.favorites:
+            # Ask if user wants to overwrite
+            if not messagebox.askyesno("Favorites", f"Alias '{alias}' already exists. Overwrite?"):
+                return
+        
+        self.favorites[alias] = path_value
+        self.save_favorites()
+        self.refresh_favorites_ui()
+        self.favorites_var.set(alias)
+        self.favorite_alias_var.set("")  # Clear alias field
+        messagebox.showinfo("Favorites", f"Saved '{alias}' to favorites.")
+
+    def load_selected_favorite(self):
+        """Load the currently selected favorite"""
+        selected_alias = self.favorites_var.get().strip()
+        if not selected_alias and self.favorites:
+            selected_alias = sorted(self.favorites.keys())[0]
+        if not selected_alias:
+            messagebox.showwarning("Favorites", "No favorite selected.")
+            return
+        if selected_alias not in self.favorites:
+            messagebox.showwarning("Favorites", f"Alias '{selected_alias}' not found.")
+            return
+        path_value = self.favorites[selected_alias]
+        self.file_path.set(path_value)
+        self.load_from_path()
+
+    def remove_selected_favorite(self):
+        """Remove the currently selected favorite"""
+        selected_alias = self.favorites_var.get().strip()
+        if not selected_alias:
+            messagebox.showwarning("Favorites", "No favorite selected.")
+            return
+        if selected_alias in self.favorites:
+            if messagebox.askyesno("Favorites", f"Remove '{selected_alias}' from favorites?"):
+                del self.favorites[selected_alias]
+                self.save_favorites()
+                self.refresh_favorites_ui()
+        else:
+            messagebox.showwarning("Favorites", f"Alias '{selected_alias}' not found.")
+    
+    def is_google_sheets_url(self, url):
+        """Check if the given string is a Google Sheets URL"""
+        if not isinstance(url, str):
+            return False
+        patterns = [
+            r'https?://docs\.google\.com/spreadsheets/.*',
+            r'https?://drive\.google\.com/file/d/.*',
+        ]
+        return any(re.match(pattern, url.strip()) for pattern in patterns)
+    
+    def convert_google_sheets_url(self, url):
+        """Convert Google Sheets URL to CSV export URL"""
+        url = url.strip()
+        
+        # Handle different Google Sheets URL formats
+        # Format 1: https://docs.google.com/spreadsheets/d/{ID}/edit#gid={GID}
+        # Format 2: https://docs.google.com/spreadsheets/d/{ID}/edit?usp=sharing
+        # Format 3: https://drive.google.com/file/d/{ID}/view?usp=sharing
+        
+        # Extract spreadsheet ID
+        match = re.search(r'/spreadsheets/d/([a-zA-Z0-9-_]+)', url)
+        if not match:
+            # Try drive.google.com format
+            match = re.search(r'/file/d/([a-zA-Z0-9-_]+)', url)
+        
+        if not match:
+            raise ValueError("Could not extract spreadsheet ID from URL")
+        
+        spreadsheet_id = match.group(1)
+        
+        # Extract GID if present
+        gid_match = re.search(r'[#&]gid=(\d+)', url)
+        gid = gid_match.group(1) if gid_match else '0'
+        
+        # Convert to CSV export URL
+        export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+        return export_url
+    
+    def download_google_sheets(self, url):
+        """Download Google Sheets as CSV and return the file path"""
+        export_url = self.convert_google_sheets_url(url)
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
+        
+        try:
+            # Download the file
+            urllib.request.urlretrieve(export_url, temp_path)
+            return temp_path
+        except Exception as e:
+            os.unlink(temp_path)  # Clean up on error
+            raise Exception(f"Failed to download Google Sheets: {str(e)}")
+    
+    def load_from_path(self):
+        """Load data from file path or Google Sheets URL"""
+        path = self.file_path.get().strip()
+        if not path:
+            messagebox.showwarning("No Path", "Please enter a file path or Google Sheets URL")
+            return
+        
+        self.load_data(path)
     
     def load_data(self, filepath):
         try:
-            # Try to read Excel file
-            self.data = pd.read_excel(filepath)
+            temp_file = None
+            
+            # Check if it's a Google Sheets URL
+            if self.is_google_sheets_url(filepath):
+                self.status_var.set("Downloading Google Sheets...")
+                self.root.update()  # Update UI to show status
+                temp_file = self.download_google_sheets(filepath)
+                filepath = temp_file
+                display_name = "Google Sheets"
+            else:
+                display_name = os.path.basename(filepath)
+            
+            # Try to read Excel/CSV file
+            if filepath.endswith('.csv'):
+                self.data = pd.read_csv(filepath)
+            else:
+                self.data = pd.read_excel(filepath)
             
             # Update status
-            self.status_var.set(f"Loaded {len(self.data)} records from {os.path.basename(filepath)}")
+            self.status_var.set(f"Loaded {len(self.data)} records from {display_name}")
             
             # Update filter dropdowns
             self.update_filters()
             
-            # Display data
-            self.display_data(self.data)
+            # Show confirmation
+            self.show_confirmation()
+            
+            # Clean up temp file if it was created
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except:
+                    pass  # Ignore cleanup errors
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load Excel file:\n{str(e)}")
+            error_msg = str(e)
+            messagebox.showerror("Error", f"Failed to load file:\n{error_msg}")
             self.status_var.set("Error loading file")
+            # Clean up temp file on error
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except:
+                    pass
     
     def update_filters(self):
         if self.data is None:
@@ -260,8 +474,8 @@ class RouteViewerApp:
                 filtered = filtered[filtered[cycle_freq_col].isin(selected_freqs)]
         
         self.filtered_data = filtered
-        self.display_data(filtered)
         self.status_var.set(f"Showing {len(filtered)} of {len(self.data)} records")
+        self.show_confirmation()
     
     def clear_filters(self):
         self.service_day_var.set("All")
@@ -274,31 +488,49 @@ class RouteViewerApp:
                 self.cycle_freq_listbox.select_set(0, tk.END)
         if self.data is not None:
             self.filtered_data = self.data.copy()
-            self.display_data(self.data)
             self.status_var.set(f"Showing all {len(self.data)} records")
+            self.show_confirmation()
     
-    def display_data(self, df):
-        # Clear existing items
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        
-        if df is None or df.empty:
+    def show_confirmation(self):
+        """Show confirmation that data is loaded and format is correct"""
+        if self.data is None or self.data.empty:
+            self.confirmation_var.set("No data loaded")
             return
         
-        # Set up columns
-        columns = list(df.columns)
-        self.tree['columns'] = columns
-        self.tree['show'] = 'headings'
+        # Find key columns to verify format
+        service_day_col = self.find_column(['Service Day', 'service_day', 'ServiceDay', 'Day', 'day'])
+        service_tech_col = self.find_column(['Service Tech', 'service_tech', 'ServiceTech', 'Tech', 'tech', 'Technician'])
+        cycle_freq_col = self.find_column(['Cycle Frequency', 'cycle_frequency', 'CycleFrequency', 'Frequency', 'frequency', 'Cycle'])
+        if cycle_freq_col is None and len(self.data.columns) >= 3:
+            cycle_freq_col = self.data.columns[2]
         
-        # Configure columns
-        for col in columns:
-            self.tree.heading(col, text=str(col))
-            self.tree.column(col, width=100, minwidth=50)
+        # Build confirmation message
+        total_records = len(self.filtered_data) if self.filtered_data is not None else len(self.data)
+        total_cols = len(self.data.columns)
         
-        # Insert data
-        for idx, row in df.iterrows():
-            values = [str(val) if pd.notna(val) else "" for val in row]
-            self.tree.insert('', tk.END, values=values)
+        msg_parts = [f"✓ Sheet loaded successfully: {total_records} record(s), {total_cols} column(s)"]
+        
+        # Check for expected columns
+        found_cols = []
+        if service_day_col:
+            found_cols.append("Service Day")
+        if service_tech_col:
+            found_cols.append("Service Tech")
+        if cycle_freq_col:
+            found_cols.append("Cycle Frequency")
+        
+        if found_cols:
+            msg_parts.append(f"✓ Found filter columns: {', '.join(found_cols)}")
+        else:
+            msg_parts.append("⚠ Warning: Could not find expected filter columns")
+        
+        # Show column names
+        col_names = list(self.data.columns)[:10]  # Show first 10 columns
+        if len(self.data.columns) > 10:
+            col_names.append(f"... and {len(self.data.columns) - 10} more")
+        msg_parts.append(f"Columns: {', '.join(str(c) for c in col_names)}")
+        
+        self.confirmation_var.set("\n".join(msg_parts))
     
     def preview_route(self):
         data = self.filtered_data if self.filtered_data is not None else self.data
@@ -407,60 +639,137 @@ class RouteViewerApp:
         @media print {{
             @page {{
                 size: letter landscape;
-                margin: 0.5in;
+                margin: 0.3in;
             }}
             body {{
                 margin: 0;
+                padding: 0;
             }}
             .no-print {{
                 display: none;
+            }}
+            /* Scale content to fit page */
+            html {{
+                width: 100%;
+                height: 100%;
+            }}
+            body {{
+                width: 100%;
+                transform-origin: top left;
+            }}
+            /* Monochrome-friendly print styles */
+            * {{
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+            .header {{
+                margin-bottom: 10px !important;
+                padding-bottom: 5px !important;
+            }}
+            .header h1 {{
+                font-size: 18px !important;
+            }}
+            .header-info {{
+                font-size: 11px !important;
+            }}
+            .filters {{
+                background-color: white !important;
+                border: 2px solid #000 !important;
+                padding: 8px !important;
+                margin-bottom: 10px !important;
+                font-size: 11px !important;
+            }}
+            table {{
+                width: 100% !important;
+                table-layout: auto !important;
+                font-size: 9px !important;
+                page-break-inside: auto;
+            }}
+            th {{
+                background-color: #e0e0e0 !important;
+                color: #000 !important;
+                border: 1px solid #000 !important;
+                padding: 6px 4px !important;
+                font-size: 9px !important;
+            }}
+            td {{
+                padding: 4px !important;
+                font-size: 9px !important;
+                word-wrap: break-word;
+            }}
+            tr {{
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }}
+            tr:nth-child(even) {{
+                background-color: #f5f5f5 !important;
+            }}
+            .summary {{
+                background-color: white !important;
+                border: 2px solid #000 !important;
+                border-left: 4px solid #000 !important;
+                padding: 8px !important;
+                margin-top: 10px !important;
+                font-size: 11px !important;
             }}
         }}
         body {{
             font-family: Arial, sans-serif;
             margin: 20px;
-            color: #333;
+            color: #000;
         }}
         .header {{
-            border-bottom: 3px solid #333;
+            border-bottom: 3px solid #000;
             padding-bottom: 10px;
             margin-bottom: 20px;
         }}
         .header h1 {{
             margin: 0;
             font-size: 24px;
+            color: #000;
         }}
         .header-info {{
             margin-top: 10px;
             font-size: 14px;
+            color: #000;
         }}
         .filters {{
             background-color: #f5f5f5;
             padding: 10px;
             margin-bottom: 20px;
             border-radius: 5px;
+            border: 2px solid #666;
         }}
         .filters strong {{
             margin-right: 10px;
+            color: #000;
         }}
         table {{
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            border: 1px solid #000;
+            table-layout: auto;
         }}
         th {{
-            background-color: #333;
-            color: white;
+            background-color: #e0e0e0;
+            color: #000;
             padding: 10px;
             text-align: left;
             font-weight: bold;
+            border: 1px solid #000;
+            word-wrap: break-word;
         }}
         td {{
             padding: 8px;
-            border-bottom: 1px solid #ddd;
+            border: 1px solid #666;
+            border-bottom: 1px solid #666;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }}
         tr:nth-child(even) {{
-            background-color: #f9f9f9;
+            background-color: #f5f5f5;
         }}
         tr:hover {{
             background-color: #f0f0f0;
@@ -468,8 +777,12 @@ class RouteViewerApp:
         .summary {{
             margin-top: 20px;
             padding: 10px;
-            background-color: #e8f4f8;
-            border-left: 4px solid #2196F3;
+            background-color: white;
+            border: 2px solid #000;
+            border-left: 4px solid #000;
+        }}
+        .summary strong {{
+            color: #000;
         }}
         .no-print {{
             margin-bottom: 20px;
@@ -524,10 +837,6 @@ class RouteViewerApp:
         
         html += """        </tbody>
     </table>
-    
-    <div class="summary">
-        <strong>Summary:</strong> {len(working_df)} route(s) displayed
-    </div>
 """
 
         # Build a chemical pick summary based on numeric columns.
