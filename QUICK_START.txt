@@ -1,0 +1,62 @@
+================================================================================
+ROUTE VIEWER - QUICK START GUIDE
+================================================================================
+
+HOW TO USE:
+-----------
+1. Double-click "RouteViewer.bat"
+2. Wait for setup to complete (first time only - takes a few minutes)
+3. The application window will open
+
+FIRST TIME SETUP:
+-----------------
+- Make sure Python is installed from https://www.python.org/downloads/
+- During Python installation, check "Add Python to PATH"
+- Then double-click RouteViewer.bat
+
+LOADING DATA:
+-------------
+Option 1: Browse for an Excel file
+  - Click "Browse" button
+  - Select your Excel file (.xlsx or .xls)
+
+Option 2: Use a Google Sheets link
+  - Paste the Google Sheets URL in the file field
+  - Click "Load"
+
+SAVING FAVORITES:
+-----------------
+- Enter a file path/URL in the main field
+- Enter a name (like "Main Sheet") in the "Alias" field
+- Click "Save as Favorite"
+- Later, select the name from the dropdown and click "Load Favorite"
+
+FILTERING:
+----------
+- Use the dropdowns to filter by Service Day, Service Tech, or Cycle Frequency
+- Select "All" to show everything
+- Cycle Frequency supports selecting multiple options
+
+PRINTING:
+---------
+- Click "Print/Export" button
+- Choose where to save the file
+- The file will open in your browser
+- Use Ctrl+P to print from your browser
+
+TROUBLESHOOTING:
+----------------
+If you see "Python is not installed":
+  - Install Python from https://www.python.org/downloads/
+  - Make sure to check "Add Python to PATH"
+  - Restart your computer after installing
+
+If the app won't start:
+  - Make sure all files are in the same folder
+  - Try running RouteViewer.bat again
+  - Check your internet connection (needed for first-time setup)
+
+================================================================================
+For more help, see SETUP_WINDOWS.md
+================================================================================
+

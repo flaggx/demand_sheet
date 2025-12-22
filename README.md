@@ -4,16 +4,33 @@ Desktop application for viewing and printing route data from Excel sheets. Filte
 
 ## Features
 
-- Load Excel files (.xlsx, .xls)
+- Load Excel files (.xlsx, .xls) or Google Sheets URLs
+- Save frequently-used files/URLs as favorites with custom names
 - Filter routes by:
   - Service Day
   - Service Tech
-  - Cycle Frequency
-- Preview filtered routes in a data table
-- Generate printable HTML pages for selected routes
+  - Cycle Frequency (supports multi-select)
+- Preview filtered routes in browser
+- Generate printable HTML pages for selected routes (landscape, monochrome-friendly)
+- Chemical pick summary automatically calculated
 - Export routes to HTML files for printing
 
 ## Installation
+
+### Windows (Easy Setup - Recommended for Non-Technical Users)
+
+**For end users who just want to use the application:**
+
+1. Install Python 3.8 or later from https://www.python.org/downloads/
+   - **Important**: Check "Add Python to PATH" during installation
+2. Double-click `RouteViewer.bat` to run the application
+   - First time setup will happen automatically (may take a few minutes)
+   - After setup, the application window will open
+3. That's it! Just double-click `RouteViewer.bat` whenever you want to use the app.
+
+See `SETUP_WINDOWS.md` for detailed Windows deployment instructions.
+
+### Linux/Mac (Manual Setup)
 
 1. Install Python 3.8 or higher
 2. Install system dependencies for tkinter (GUI library):
@@ -21,24 +38,25 @@ Desktop application for viewing and printing route data from Excel sheets. Filte
    - **Ubuntu/Debian**: `sudo apt-get install python3-tk`
    - **Fedora**: `sudo dnf install python3-tkinter`
    - **macOS**: Usually pre-installed with Python
-   - **Windows**: Usually pre-installed with Python
 3. Create a virtual environment (recommended):
    ```bash
    python3 -m venv venv
    ```
-3. Activate the virtual environment:
+4. Activate the virtual environment:
    ```bash
    source venv/bin/activate  # On Linux/Mac
-   # or
-   venv\Scripts\activate     # On Windows
    ```
-4. Install required dependencies:
+5. Install required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
 ## Usage
 
+### Windows
+Simply double-click `RouteViewer.bat` - it handles everything automatically!
+
+### Linux/Mac
 1. Activate the virtual environment (if not already activated):
    ```bash
    source venv/bin/activate
@@ -53,13 +71,11 @@ Desktop application for viewing and printing route data from Excel sheets. Filte
    ```bash
    ./run.sh
    ```
-   
-   Or use the virtual environment's Python directly:
-   ```bash
-   ./venv/bin/python route_viewer.py
-   ```
 
-2. Click "Browse" to select an Excel file containing route data
+2. Load your data:
+   - Click "Browse" to select an Excel file, OR
+   - Paste a Google Sheets URL in the file field and click "Load"
+   - You can save frequently-used files/URLs as favorites with custom names
 
 3. The application will automatically detect columns for:
    - Service Day (looks for: "Service Day", "service_day", "ServiceDay", "Day", "day")
