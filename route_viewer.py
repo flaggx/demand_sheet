@@ -406,7 +406,7 @@ class RouteViewerApp:
     <style>
         @media print {{
             @page {{
-                size: letter;
+                size: letter landscape;
                 margin: 0.5in;
             }}
             body {{
