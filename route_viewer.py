@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Desktop application for viewing and printing route data from Excel sheets.
 Filters by service day, service tech, and cycle frequency.
@@ -15,6 +14,297 @@ import tempfile
 import urllib.request
 import re
 import json
+import subprocess
+import threading
+import sys
+import ctypes as ct
+
+# Cursor/VS Code dark theme colors
+THEME = {
+    "bg": "#1e1e1e",
+    "bg_panel": "#252526",
+    "bg_input": "#3c3c3c",
+    "fg": "#d4d4d4",
+    "fg_muted": "#858585",
+    "accent": "#007acc",
+    "accent_hover": "#1a8ad4",
+    "border": "#3c3c3c",
+    "border_visible": "#505050",   # stronger border for inputs/panels
+    "panel_border": "#2d5a7b",    # subtle blue tint for section frames
+    "select_bg": "#094771",
+    "menu_bg": "#252526",
+    "menu_fg": "#cccccc",
+    "menu_active_bg": "#094771",
+    "menu_active_fg": "#ffffff",
+    "status_bg": "#007acc",
+    "status_fg": "#ffffff",
+}
+
+
+def _dark_button(parent, text, command, primary=False, **kwargs):
+    """Create a dark-themed tk.Button. Set primary=True for accent blue (main actions)."""
+    t = THEME
+    bg = t["accent"] if primary else t["bg_input"]
+    abg = t["accent_hover"] if primary else t["accent"]
+    return tk.Button(
+        parent,
+        text=text,
+        command=command,
+        bg=bg,
+        fg=t["status_fg"] if primary else t["fg"],
+        activebackground=abg,
+        activeforeground=t["status_fg"] if primary else t["fg"],
+        highlightthickness=1,
+        highlightbackground=t["border_visible"],
+        highlightcolor=t["accent"],
+        relief=tk.FLAT,
+        font=("Segoe UI", 9),
+        cursor="hand2",
+        padx=12,
+        pady=6,
+        **kwargs,
+    )
+
+
+def _dark_entry(parent, textvariable=None, width=None, **kwargs):
+    """Create a dark-themed tk.Entry with a visible border."""
+    t = THEME
+    opts = dict(
+        bg=t["bg_input"],
+        fg=t["fg"],
+        insertbackground=t["fg"],
+        highlightthickness=1,
+        highlightbackground=t["border_visible"],
+        highlightcolor=t["accent"],
+        relief=tk.FLAT,
+        font=("Segoe UI", 9),
+    )
+    if width is not None:
+        opts["width"] = width
+    if textvariable is not None:
+        opts["textvariable"] = textvariable
+    opts.update(kwargs)
+    return tk.Entry(parent, **opts)
+
+
+class DarkCombobox(tk.Frame):
+    """A dark-themed dropdown that behaves like a readonly combobox."""
+    
+    def __init__(self, parent, textvariable=None, width=20, **kwargs):
+        t = THEME
+        super().__init__(parent, **kwargs)
+        self._var = textvariable if textvariable is not None else tk.StringVar()
+        self._choices = []  # avoid _options: shadows tkinter Widget._options used by grid()
+        self._popup = None
+        
+        self.entry = tk.Entry(
+            self,
+            textvariable=self._var,
+            state="disabled",
+            bg=t["bg_input"],
+            fg=t["fg"],
+            disabledbackground=t["bg_input"],
+            disabledforeground=t["fg"],
+            font=("Segoe UI", 9),
+            highlightthickness=1,
+            highlightbackground=t["border_visible"],
+            relief=tk.FLAT,
+            width=width,
+        )
+        self.entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 0))
+        
+        self._arrow_btn = tk.Button(
+            self,
+            text="\u25BC",
+            command=self._open_dropdown,
+            bg=t["bg_input"],
+            fg=t["fg"],
+            activebackground=t["accent"],
+            activeforeground=t["fg"],
+            highlightthickness=1,
+            highlightbackground=t["border_visible"],
+            relief=tk.FLAT,
+            font=("Segoe UI", 8),
+            cursor="hand2",
+            width=2,
+        )
+        self._arrow_btn.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.entry.bind("<Button-1>", lambda e: self._open_dropdown())
+    
+    def set_options(self, options):
+        self._choices = list(options) if options else []
+    
+    def get(self):
+        return self._var.get()
+    
+    def set(self, value):
+        self._var.set(value)
+    
+    def _open_dropdown(self):
+        if not self._choices:
+            return
+        t = THEME
+        if self._popup and self._popup.winfo_exists():
+            self._popup.destroy()
+        
+        self._popup = tk.Toplevel(self)
+        self._popup.overrideredirect(True)
+        self._popup.configure(bg=t["border"])
+        try:
+            self._popup.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        
+        # Close dropdown when app loses focus or when user clicks outside the dropdown
+        root = self.winfo_toplevel()
+        self._focus_out_after_id = None
+        def _on_root_focus_out(evt=None):
+            if self._focus_out_after_id:
+                try:
+                    root.after_cancel(self._focus_out_after_id)
+                except Exception:
+                    pass
+            self._focus_out_after_id = root.after(150, self._close_popup_if_app_lost_focus)
+        self._focus_out_handler = _on_root_focus_out
+        root.bind("<FocusOut>", _on_root_focus_out, add="+")
+        
+        def _on_click_anywhere(evt):
+            if not self._popup or not self._popup.winfo_exists():
+                return
+            try:
+                w = evt.widget
+                top = w.winfo_toplevel()
+                if top == self._popup:
+                    return  # click was inside the dropdown
+                _unbind_focus_out()
+            except Exception:
+                pass
+            if self._popup and self._popup.winfo_exists():
+                self._popup.destroy()
+            self._popup = None
+        self._click_out_handler = _on_click_anywhere
+        root.bind("<Button-1>", _on_click_anywhere, add="+")
+        
+        def _unbind_focus_out():
+            if getattr(self, "_focus_out_after_id", None):
+                try:
+                    root.after_cancel(self._focus_out_after_id)
+                except Exception:
+                    pass
+                self._focus_out_after_id = None
+            try:
+                root.unbind("<FocusOut>", self._focus_out_handler)
+            except Exception:
+                pass
+            try:
+                root.unbind("<Button-1>", self._click_out_handler)
+            except Exception:
+                pass
+        
+        lb_frame = tk.Frame(self._popup, bg=t["bg_input"], highlightthickness=1, highlightbackground=t["border"])
+        lb_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        
+        scrollbar = tk.Scrollbar(lb_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        listbox = tk.Listbox(
+            lb_frame,
+            bg=t["bg_input"],
+            fg=t["fg"],
+            selectbackground=t["select_bg"],
+            selectforeground=t["fg"],
+            font=("Segoe UI", 9),
+            highlightthickness=0,
+            relief=tk.FLAT,
+            yscrollcommand=scrollbar.set,
+        )
+        for o in self._choices:
+            listbox.insert(tk.END, o)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=listbox.yview)
+        
+        def on_select(evt=None):
+            sel = listbox.curselection()
+            if sel:
+                self._var.set(listbox.get(sel[0]))
+            _unbind_focus_out()
+            if self._popup and self._popup.winfo_exists():
+                self._popup.destroy()
+            self._popup = None
+        
+        def on_escape(evt=None):
+            _unbind_focus_out()
+            if self._popup and self._popup.winfo_exists():
+                self._popup.destroy()
+            self._popup = None
+        
+        self._popup.bind("<Escape>", on_escape)
+        listbox.bind("<<ListboxSelect>>", lambda e: self._popup.after(50, on_select))
+        listbox.bind("<Double-Button-1>", on_select)
+        
+        # Position below the combobox
+        self.update_idletasks()
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height()
+        w = max(self.winfo_width(), 120)
+        h = min(200, max(80, len(self._choices) * 22))
+        self._popup.geometry(f"{w}x{h}+{x}+{y}")
+        
+        # Select current value in listbox
+        try:
+            idx = self._choices.index(self._var.get())
+            listbox.selection_set(idx)
+            listbox.see(idx)
+        except ValueError:
+            pass
+        
+        self._popup.focus_set()
+        listbox.focus_set()
+    
+    def _maybe_close_popup(self):
+        if self._popup and self._popup.winfo_exists():
+            self._popup.destroy()
+            self._popup = None
+    
+    def _close_popup_if_app_lost_focus(self):
+        """On Windows: close the dropdown only if another app's window has focus (not our main window and not our dropdown)."""
+        if not self._popup or not self._popup.winfo_exists():
+            return
+        if sys.platform != "win32":
+            return
+        try:
+            root = self.winfo_toplevel()
+            tid = root.winfo_id()
+            our_hwnd = ct.windll.user32.GetParent(tid) or tid
+            popup_tid = self._popup.winfo_id()
+            popup_hwnd = ct.windll.user32.GetParent(popup_tid) or popup_tid
+            fg_hwnd = ct.windll.user32.GetForegroundWindow()
+            # Keep dropdown open if focus is on our main window or on the dropdown popup itself
+            if fg_hwnd == our_hwnd or fg_hwnd == popup_hwnd:
+                return
+            if getattr(self, "_focus_out_after_id", None):
+                try:
+                    root.after_cancel(self._focus_out_after_id)
+                except Exception:
+                    pass
+                self._focus_out_after_id = None
+            for bind_id, evt in [(getattr(self, "_focus_out_handler", None), "<FocusOut>"),
+                                 (getattr(self, "_click_out_handler", None), "<Button-1>")]:
+                if bind_id is not None:
+                    try:
+                        root.unbind(evt, bind_id)
+                    except Exception:
+                        pass
+            if self._popup and self._popup.winfo_exists():
+                self._popup.destroy()
+            self._popup = None
+        except Exception:
+            pass
+    
+    @property
+    def config(self):
+        return self.entry.config  # for compatibility if anything uses combobox.config
 
 
 class RouteViewerApp:
@@ -27,8 +317,91 @@ class RouteViewerApp:
         self.filtered_data = None
         self.favorites = {}  # Dictionary: alias -> path/URL
         self.favorites_file = Path.home() / ".demand_sheet_favorites.json"
+        self._app_dir = Path(__file__).resolve().parent
         
+        self._setup_theme()
         self.setup_ui()
+    
+    def _setup_theme(self):
+        """Apply Cursor/VS Code–style dark theme."""
+        root = self.root
+        t = THEME
+        root.configure(bg=t["bg"])
+        
+        # Menu bar (tk.Menu)
+        root.option_add("*Menu.background", t["menu_bg"])
+        root.option_add("*Menu.foreground", t["menu_fg"])
+        root.option_add("*Menu.activeBackground", t["menu_active_bg"])
+        root.option_add("*Menu.activeForeground", t["menu_active_fg"])
+        root.option_add("*Menu.selectColor", t["accent"])
+        
+        # Use 'clam' so ttk respects our colors on Windows
+        style = ttk.Style()
+        style.theme_use("clam")
+        
+        # Frames (visible border on panels for contrast)
+        style.configure("TFrame", background=t["bg"])
+        style.configure("TLabelframe", background=t["bg"], foreground=t["fg"], bordercolor=t["panel_border"])
+        style.configure("TLabelframe.Label", background=t["bg"], foreground=t["accent"], font=("Segoe UI", 9, "bold"))
+        
+        # Labels
+        style.configure("TLabel", background=t["bg"], foreground=t["fg"], font=("Segoe UI", 9))
+        style.configure("Muted.TLabel", background=t["bg"], foreground=t["fg_muted"], font=("Segoe UI", 9))
+        
+        # Buttons
+        style.configure("TButton", background=t["bg_input"], foreground=t["fg"], font=("Segoe UI", 9), padding=(12, 6))
+        style.map("TButton", background=[("active", t["accent"]), ("pressed", t["accent"])], foreground=[("active", t["fg"])])
+        
+        # Entry
+        style.configure("TEntry", fieldbackground=t["bg_input"], foreground=t["fg"], insertcolor=t["fg"], padding=6)
+        
+        # Combobox
+        style.configure("TCombobox", fieldbackground=t["bg_input"], foreground=t["fg"], background=t["bg_input"], arrowcolor=t["fg"], padding=6)
+        style.map("TCombobox", fieldbackground=[("readonly", t["bg_input"])], foreground=[("readonly", t["fg"])])
+        
+        # Status bar style (sunken label)
+        style.configure("Status.TLabel", background=t["status_bg"], foreground=t["status_fg"], font=("Segoe UI", 9), padding=(8, 4))
+        
+        # Dark title bar on Windows 10/11 (apply after window is shown)
+        if sys.platform == "win32":
+            root.after(100, self._apply_dark_title_bar)
+    
+    def _apply_dark_title_bar(self):
+        """Use Windows DWM to draw the title bar in dark mode."""
+        try:
+            root = self.root
+            root.update()  # ensure window is realized and has a valid hwnd
+            tid = root.winfo_id()
+            # Try both: sometimes Tk gives client area (GetParent = frame), sometimes the frame directly
+            for hwnd in (ct.windll.user32.GetParent(tid) or tid, tid):
+                if not hwnd:
+                    continue
+                DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+                for value in (ct.c_int(2), ct.c_int(1)):  # 2 = Win11, 1 = some Win10
+                    try:
+                        ret = ct.windll.dwmapi.DwmSetWindowAttribute(
+                            ct.c_void_p(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE, ct.byref(value), ct.sizeof(value)
+                        )
+                        if ret == 0:
+                            break
+                    except Exception:
+                        pass
+                else:
+                    continue
+                break
+            # Force redraw (needed on many Windows 10 systems)
+            root.after(50, self._force_dark_title_bar_redraw)
+        except Exception:
+            pass
+    
+    def _force_dark_title_bar_redraw(self):
+        """Iconify/deiconify to force Windows to redraw the title bar in dark mode."""
+        try:
+            root = self.root
+            root.iconify()
+            root.after(10, root.deiconify)
+        except Exception:
+            pass
         
     def setup_ui(self):
         # Main container
@@ -40,88 +413,233 @@ class RouteViewerApp:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
-        # File selection
-        ttk.Label(main_frame, text="Excel File or Google Sheets URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        t = THEME
+        # No menu bar — removes the white bar; "Check for updates" is a button at the bottom
+        self.root.config(menu="")
+        
+        # File & Favorites — one label column (left), one control column (right) for clear UX
+        file_section_frame = ttk.LabelFrame(main_frame, text="File & Favorites", padding="10")
+        file_section_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        file_section_frame.columnconfigure(0, minsize=200)   # fixed width so all labels align
+        file_section_frame.columnconfigure(1, weight=1)
+        
+        # Row 0: File / URL with label directly to the left
+        ttk.Label(file_section_frame, text="Excel file or Google Sheets URL:").grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
         self.file_path = tk.StringVar()
-        file_frame = ttk.Frame(main_frame)
-        file_frame.grid(row=0, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        file_frame.columnconfigure(0, weight=1)
-        file_entry = ttk.Entry(file_frame, textvariable=self.file_path)
+        row0_frame = ttk.Frame(file_section_frame)
+        row0_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        row0_frame.columnconfigure(0, weight=1)
+        file_entry = _dark_entry(row0_frame, textvariable=self.file_path)
         file_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
         file_entry.bind('<Return>', lambda e: self.load_from_path())
-        ttk.Button(file_frame, text="Browse", command=self.browse_file).grid(row=0, column=1)
-        ttk.Button(file_frame, text="Load", command=self.load_from_path).grid(row=0, column=2, padx=(5, 0))
+        _dark_button(row0_frame, text="Browse", command=self.browse_file).grid(row=0, column=1)
+        _dark_button(row0_frame, text="Load", command=self.load_from_path, primary=True).grid(row=0, column=2, padx=(5, 0))
 
-        # Favorites section (saved file paths / URLs)
-        ttk.Label(file_frame, text="Favorites:").grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        # Row 1: Favorites dropdown with label
+        ttk.Label(file_section_frame, text="Saved favorites:").grid(row=1, column=0, sticky=tk.W, pady=(0, 8))
         self.favorites_var = tk.StringVar()
-        self.favorites_combo = ttk.Combobox(file_frame, textvariable=self.favorites_var, state="readonly", width=50)
-        self.favorites_combo.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
-        ttk.Button(file_frame, text="Load Favorite", command=self.load_selected_favorite).grid(row=1, column=2, padx=(5, 0), pady=(5, 0))
-        ttk.Label(file_frame, text="Alias:").grid(row=2, column=0, sticky=tk.W, pady=(5, 0))
         self.favorite_alias_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.favorite_alias_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(5, 5), pady=(5, 0))
-        ttk.Button(file_frame, text="Save as Favorite", command=self.save_current_to_favorites).grid(row=2, column=2, padx=(5, 0), pady=(5, 0))
-        ttk.Button(file_frame, text="Remove Favorite", command=self.remove_selected_favorite).grid(row=3, column=2, padx=(5, 0), pady=(5, 0))
+        row1_frame = ttk.Frame(file_section_frame)
+        row1_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        row1_frame.columnconfigure(0, weight=1)
+        self.favorites_combo = DarkCombobox(row1_frame, textvariable=self.favorites_var, width=50)
+        self.favorites_combo.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        _dark_button(row1_frame, text="Load Favorite", command=self.load_selected_favorite).grid(row=0, column=1)
+
+        # Row 2: Alias for saving, with label
+        ttk.Label(file_section_frame, text="Save current as (alias):").grid(row=2, column=0, sticky=tk.W, pady=(0, 8))
+        row2_frame = ttk.Frame(file_section_frame)
+        row2_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        row2_frame.columnconfigure(0, weight=1)
+        _dark_entry(row2_frame, textvariable=self.favorite_alias_var, width=35).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        _dark_button(row2_frame, text="Save as Favorite", command=self.save_current_to_favorites).grid(row=0, column=1)
+
+        # Row 3: Remove favorite (label for clarity)
+        ttk.Label(file_section_frame, text="Remove a favorite:").grid(row=3, column=0, sticky=tk.W, pady=(0, 0))
+        _dark_button(file_section_frame, text="Remove Favorite", command=self.remove_selected_favorite).grid(row=3, column=1, sticky=tk.W, pady=(0, 0))
         
         # After file/favorites UI is built, load any saved favorites
         self.load_favorites()
 
-        # Filters section
+        # Filters — same label column width for alignment with File section
         filter_frame = ttk.LabelFrame(main_frame, text="Filters", padding="10")
         filter_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        filter_frame.columnconfigure(0, minsize=200)
         filter_frame.columnconfigure(1, weight=1)
         
-        # Service Day filter
-        ttk.Label(filter_frame, text="Service Day:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(filter_frame, text="Service day:").grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
         self.service_day_var = tk.StringVar(value="All")
-        self.service_day_combo = ttk.Combobox(filter_frame, textvariable=self.service_day_var, state="readonly", width=30)
-        self.service_day_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        self.service_day_combo = DarkCombobox(filter_frame, textvariable=self.service_day_var, width=30)
+        self.service_day_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=(0, 8), padx=(0, 5))
+        self.service_day_combo.set_options(["All"])
         
-        # Service Tech filter
-        ttk.Label(filter_frame, text="Service Tech:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(filter_frame, text="Service tech:").grid(row=1, column=0, sticky=tk.W, pady=(0, 8))
         self.service_tech_var = tk.StringVar(value="All")
-        self.service_tech_combo = ttk.Combobox(filter_frame, textvariable=self.service_tech_var, state="readonly", width=30)
-        self.service_tech_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        self.service_tech_combo = DarkCombobox(filter_frame, textvariable=self.service_tech_var, width=30)
+        self.service_tech_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=(0, 8), padx=(0, 5))
+        self.service_tech_combo.set_options(["All"])
         
-        # Cycle Frequency filter
-        ttk.Label(filter_frame, text="Cycle Frequency:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(filter_frame, text="Cycle frequency (hold Ctrl to pick several):").grid(row=2, column=0, sticky=tk.W, pady=(0, 8))
         self.cycle_freq_var = tk.StringVar(value="All")
         # Use a multi-select listbox for cycle frequency so multiple options can be chosen
+        t = THEME
         self.cycle_freq_listbox = tk.Listbox(
             filter_frame,
             selectmode=tk.MULTIPLE,
             exportselection=False,
-            height=5
+            height=9,
+            bg=t["bg_input"],
+            fg=t["fg"],
+            selectbackground=t["select_bg"],
+            selectforeground=t["fg"],
+            font=("Segoe UI", 9),
+            highlightthickness=1,
+            highlightbackground=t["border_visible"],
+            highlightcolor=t["accent"],
+            borderwidth=0,
+            relief=tk.FLAT,
         )
-        self.cycle_freq_listbox.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        self.cycle_freq_listbox.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=(0, 0), padx=(0, 5))
         self.cycle_freq_listbox.bind('<<ListboxSelect>>', lambda event: self.apply_filters())
         
         # Bind filter changes
-        self.service_day_var.trace('w', lambda *args: self.apply_filters())
-        self.service_tech_var.trace('w', lambda *args: self.apply_filters())
+        self.service_day_var.trace_add("write", lambda *args: self.apply_filters())
+        self.service_tech_var.trace_add("write", lambda *args: self.apply_filters())
         
-        # Action buttons
+        # Main actions (clear grouping)
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=2, column=0, columnspan=3, pady=10)
+        button_frame.grid(row=2, column=0, columnspan=3, pady=(4, 12))
+        ttk.Label(button_frame, text="Actions:").pack(side=tk.LEFT, padx=(0, 10))
+        _dark_button(button_frame, text="Preview Route", command=self.preview_route, primary=True).pack(side=tk.LEFT, padx=5)
+        _dark_button(button_frame, text="Print/Export", command=self.print_route, primary=True).pack(side=tk.LEFT, padx=5)
+        _dark_button(button_frame, text="Clear Filters", command=self.clear_filters).pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(button_frame, text="Preview Route", command=self.preview_route).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Print/Export", command=self.print_route).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Clear Filters", command=self.clear_filters).pack(side=tk.LEFT, padx=5)
-        
-        # Data confirmation area
+        # Sheet status (what’s loaded and detected)
         confirmation_frame = ttk.LabelFrame(main_frame, text="Sheet Status", padding="10")
         confirmation_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
-        confirmation_frame.columnconfigure(0, weight=1)
+        confirmation_frame.columnconfigure(0, minsize=200)
+        confirmation_frame.columnconfigure(1, weight=1)
+        ttk.Label(confirmation_frame, text="Status:").grid(row=0, column=0, sticky=tk.NW, pady=(0, 4))
+        self.confirmation_var = tk.StringVar(value="No data loaded. Choose a file or URL above and click Load.")
+        confirmation_label = ttk.Label(confirmation_frame, textvariable=self.confirmation_var, style="Muted.TLabel", wraplength=700)
+        confirmation_label.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=(0, 4))
         
-        self.confirmation_var = tk.StringVar(value="No data loaded")
-        confirmation_label = ttk.Label(confirmation_frame, textvariable=self.confirmation_var, 
-                                      font=('Arial', 10), foreground='#666666', wraplength=700)
-        confirmation_label.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
-        
-        # Status bar
+        # Check for updates button and status bar
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5, 0))
+        bottom_frame.columnconfigure(0, weight=1)
+        _dark_button(bottom_frame, text="Check for updates", command=self._start_update_check).pack(side=tk.RIGHT, padx=(5, 0))
         self.status_var = tk.StringVar(value="Ready - Please select an Excel file")
-        ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN).grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        status_label = ttk.Label(bottom_frame, textvariable=self.status_var, style="Status.TLabel")
+        status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+    
+    def _start_update_check(self):
+        """Start update check in a background thread so the UI stays responsive."""
+        self.status_var.set("Checking for updates...")
+        def run():
+            result = self._do_update_check()
+            self.root.after(0, lambda: self._on_update_check_done(result))
+        threading.Thread(target=run, daemon=True).start()
+    
+    def _do_update_check(self):
+        """
+        Check for updates via git. Runs in background thread.
+        Returns (ok, message, behind_count) where:
+          ok: False = error/not applicable, True = check succeeded
+          message: user-facing text
+          behind_count: number of commits behind remote (0 if not applicable or error)
+        """
+        app_dir = self._app_dir
+        git_dir = app_dir / ".git"
+        if not git_dir.is_dir():
+            return (False, "Updates not available. This copy was not installed from a git repository.", 0)
+        
+        def run_git(*args, timeout=15):
+            try:
+                r = subprocess.run(
+                    [ "git" ] + list(args),
+                    cwd=app_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                return (r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip())
+            except FileNotFoundError:
+                return (-1, "", "Git not found")
+            except subprocess.TimeoutExpired:
+                return (-1, "", "Timed out")
+        
+        # Fetch latest from remote (does not modify working tree)
+        code, _, err = run_git("fetch", "origin", timeout=30)
+        if code != 0:
+            return (False, "Could not check for updates. Is Git installed? Is this folder a git clone? Try checking your network.", 0)
+        
+        # Only allow update when working tree is clean (no uncommitted changes)
+        code, out, _ = run_git("status", "--porcelain")
+        if code != 0:
+            return (False, "Could not check repository status.", 0)
+        if out:
+            return (True, "You have local changes. Updates are only applied when the working tree is clean. Commit or discard changes first.", 0)
+        
+        # Current branch
+        code, branch, _ = run_git("rev-parse", "--abbrev-ref", "HEAD")
+        if code != 0 or not branch:
+            return (True, "You are up to date.", 0)
+        
+        # Prefer origin/main, then origin/master
+        for remote_ref in [f"origin/{branch}", "origin/main", "origin/master"]:
+            code, count_str, _ = run_git("rev-list", "--count", f"HEAD..{remote_ref}")
+            if code == 0 and count_str.isdigit():
+                behind = int(count_str)
+                if behind > 0:
+                    return (True, f"An update is available ({behind} new commit(s)).\n\nDo you want to update now?", behind)
+                return (True, "You are up to date.", 0)
+        
+        return (True, "You are up to date.", 0)
+    
+    def _on_update_check_done(self, result):
+        ok, message, behind_count = result
+        self.status_var.set("Ready - Please select an Excel file")
+        if not ok:
+            messagebox.showinfo("Check for updates", message)
+            return
+        if behind_count > 0:
+            if messagebox.askyesno("Update available", message, default=tk.YES):
+                self._start_update_pull()
+            return
+        messagebox.showinfo("Check for updates", message)
+    
+    def _start_update_pull(self):
+        """Run git pull in a background thread."""
+        self.status_var.set("Updating...")
+        def run():
+            result = self._do_update_pull()
+            self.root.after(0, lambda: self._on_update_pull_done(result))
+        threading.Thread(target=run, daemon=True).start()
+    
+    def _do_update_pull(self):
+        """Pull latest changes. Runs in background thread. Returns (success, message)."""
+        app_dir = self._app_dir
+        try:
+            r = subprocess.run(
+                ["git", "pull", "origin"],
+                cwd=app_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if r.returncode == 0:
+                return (True, "Update complete. Please restart the application to use the new version.")
+            return (False, (r.stderr or r.stdout or "Update failed.").strip() or "Update failed.")
+        except FileNotFoundError:
+            return (False, "Git not found.")
+        except subprocess.TimeoutExpired:
+            return (False, "Update timed out.")
+    
+    def _on_update_pull_done(self, result):
+        success, message = result
+        self.status_var.set("Ready - Please select an Excel file")
+        messagebox.showinfo("Update" if success else "Update failed", message)
         
     def browse_file(self):
         filename = filedialog.askopenfilename(
@@ -181,7 +699,7 @@ class RouteViewerApp:
         """Update the favorites dropdown with current aliases"""
         if hasattr(self, "favorites_combo"):
             aliases = sorted(self.favorites.keys())
-            self.favorites_combo["values"] = aliases
+            self.favorites_combo.set_options(aliases)
             # Keep selection if still valid
             current = self.favorites_var.get()
             if current in aliases:
@@ -368,16 +886,16 @@ class RouteViewerApp:
         # Update Service Day
         if service_day_col:
             values = ['All'] + sorted(self.data[service_day_col].dropna().unique().tolist())
-            self.service_day_combo['values'] = values
+            self.service_day_combo.set_options(values)
         else:
-            self.service_day_combo['values'] = ['All']
+            self.service_day_combo.set_options(['All'])
         
         # Update Service Tech
         if service_tech_col:
             values = ['All'] + sorted(self.data[service_tech_col].dropna().unique().tolist())
-            self.service_tech_combo['values'] = values
+            self.service_tech_combo.set_options(values)
         else:
-            self.service_tech_combo['values'] = ['All']
+            self.service_tech_combo.set_options(['All'])
         
         # Update Cycle Frequency (column C fallback if name not found)
         if cycle_freq_col is None and self.data is not None and len(self.data.columns) >= 3:

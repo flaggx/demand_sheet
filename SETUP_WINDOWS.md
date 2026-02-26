@@ -63,7 +63,7 @@ You can deploy this application by:
 - No shared configuration files needed
 
 ### Requirements
-- Windows 7 or later
+- Windows 10 or Windows 11
 - Python 3.8 or later
 - Internet connection (for first-time dependency installation)
 

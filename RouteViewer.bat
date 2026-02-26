@@ -57,9 +57,9 @@ echo.
 REM Upgrade pip
 python -m pip install --upgrade pip --quiet
 
-REM Install/update dependencies
+REM Install/update dependencies (longer timeout for slow networks)
 echo [4/4] Installing dependencies...
-python -m pip install -r requirements.txt --quiet
+python -m pip install -r requirements.txt --quiet --timeout 120
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies.
     echo.
