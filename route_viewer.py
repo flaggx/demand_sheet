@@ -40,6 +40,36 @@ THEME = {
     "status_fg": "#ffffff",
 }
 
+# Cycle frequency filter: user sees these 5 options; rows match by substring in the column value
+CYCLE_FREQ_OPTIONS = ["Cycle 1", "Cycle 2", "Cycle 3", "Cycle 4", "Call In"]
+
+
+def _cell_matches_cycle_option(cell_value, option):
+    """
+    Return True if the raw cell value belongs to the given option.
+    - Cycle 1/2/3/4: cell contains that digit as a standalone cycle (e.g. "1-3" matches Cycle 1 and Cycle 3;
+      "10" does not match Cycle 1; "21" does not match Cycle 2).
+    - Call In: cell contains "call in" (case-insensitive).
+    """
+    if pd.isna(cell_value):
+        return False
+    s = str(cell_value).strip()
+    if not s:
+        return False
+    if option == "Call In":
+        return "call in" in s.lower()
+    # Match cycle digit only when it's standalone (not part of 10, 21, 12, etc.)
+    # Pattern: digit is preceded by start or non-digit, followed by end or non-digit
+    if option == "Cycle 1":
+        return re.search(r"(^|[^\d])1($|[^\d])", s) is not None
+    if option == "Cycle 2":
+        return re.search(r"(^|[^\d])2($|[^\d])", s) is not None
+    if option == "Cycle 3":
+        return re.search(r"(^|[^\d])3($|[^\d])", s) is not None
+    if option == "Cycle 4":
+        return re.search(r"(^|[^\d])4($|[^\d])", s) is not None
+    return False
+
 
 def _dark_button(parent, text, command, primary=False, **kwargs):
     """Create a dark-themed tk.Button. Set primary=True for accent blue (main actions)."""
@@ -901,15 +931,12 @@ class RouteViewerApp:
         if cycle_freq_col is None and self.data is not None and len(self.data.columns) >= 3:
             cycle_freq_col = self.data.columns[2]
 
-        # Populate cycle frequency multi-select listbox
+        # Cycle frequency: fixed options Cycle 1–4 and Call In (matching by substring in cell)
         self.cycle_freq_listbox.delete(0, tk.END)
+        for opt in CYCLE_FREQ_OPTIONS:
+            self.cycle_freq_listbox.insert(tk.END, opt)
         if cycle_freq_col:
-            values = sorted(self.data[cycle_freq_col].dropna().unique().tolist())
-            for v in values:
-                self.cycle_freq_listbox.insert(tk.END, v)
-            # Select all by default -> behaves like "All"
-            if values:
-                self.cycle_freq_listbox.select_set(0, tk.END)
+            self.cycle_freq_listbox.select_set(0, tk.END)  # All selected = "All"
             self.cycle_freq_var.set("All")
         else:
             self.cycle_freq_var.set("All")
@@ -980,16 +1007,18 @@ class RouteViewerApp:
         if service_tech_col and self.service_tech_var.get() != "All":
             filtered = filtered[filtered[service_tech_col] == self.service_tech_var.get()]
         
-        # Apply Cycle Frequency filter (supports multi-select, column C fallback)
+        # Apply Cycle Frequency filter: Cycle 1–4 and Call In (match by substring in cell)
         cycle_freq_col = self.find_column(['Cycle Frequency', 'cycle_frequency', 'CycleFrequency', 'Frequency', 'frequency', 'Cycle'])
         if cycle_freq_col is None and self.data is not None and len(self.data.columns) >= 3:
             cycle_freq_col = self.data.columns[2]
 
         if cycle_freq_col:
             selected_freqs = self.get_selected_cycle_freqs()
-            # If some (but not all) options are selected, filter by them
             if selected_freqs:
-                filtered = filtered[filtered[cycle_freq_col].isin(selected_freqs)]
+                mask = pd.Series(False, index=filtered.index)
+                for opt in selected_freqs:
+                    mask |= filtered[cycle_freq_col].apply(lambda v: _cell_matches_cycle_option(v, opt))
+                filtered = filtered[mask]
         
         self.filtered_data = filtered
         self.status_var.set(f"Showing {len(filtered)} of {len(self.data)} records")
