@@ -1,57 +1,79 @@
-# Demand Sheet - Route Viewer
+# Demand Sheet (web)
 
-Desktop application for viewing and printing route data from Excel sheets. Filters routes by service day, service tech, and cycle frequency.
+Route demand sheet web app: **Next.js** (TypeScript) with **Supabase** (planned).
 
-## Features
+## Prerequisites
 
-- Load Excel files (.xlsx, .xls) or Google Sheets URLs
-- Save frequently-used files/URLs as favorites with custom names
-- Filter routes by:
-  - Service Day
-  - Service Tech
-  - Cycle Frequency (supports multi-select)
-- Preview filtered routes in browser
-- Generate printable HTML pages for selected routes (landscape, monochrome-friendly)
-- Chemical pick summary automatically calculated
-- Export routes to HTML files for printing
+- [Node.js](https://nodejs.org/) 20+ (includes `npm`)
 
-## Installation
+## Setup
 
-**Supported:** Windows 10 and Windows 11.
+```bash
+npm install
+```
 
-1. Install Python 3.8 or later from https://www.python.org/downloads/
-   - **Important**: Check "Add Python to PATH" during installation
-2. Double-click `RouteViewer.bat` to run the application
-   - First time setup will happen automatically (may take a few minutes)
-   - After setup, the application window will open
-3. That's it! Just double-click `RouteViewer.bat` whenever you want to use the app.
+### Supabase
 
-See `SETUP_WINDOWS.md` for detailed deployment and troubleshooting.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Copy `.env.local.example` to `.env.local` and set **Project URL**.
 
-## Usage
+**API keys (current practice)** — see [Understanding API keys](https://supabase.com/docs/guides/api/api-keys):
 
-1. Double-click `RouteViewer.bat` to start the app.
-2. Load your data:
-   - Click "Browse" to select an Excel file, OR
-   - Paste a Google Sheets URL in the file field and click "Load"
-   - You can save frequently-used files/URLs as favorites with custom names
-3. The application will automatically detect columns for:
-   - Service Day (looks for: "Service Day", "service_day", "ServiceDay", "Day", "day")
-   - Service Tech (looks for: "Service Tech", "service_tech", "ServiceTech", "Tech", "tech", "Technician")
-   - Cycle Frequency (looks for: "Cycle Frequency", "cycle_frequency", "CycleFrequency", "Frequency", "frequency", "Cycle")
-4. Use the filter dropdowns to select specific values or "All" to show everything
-5. Click "Preview Route" to see the filtered data in your browser
-6. Click "Print/Export" to save a printable HTML file and open it in your browser for printing
+- **Recommended:** Dashboard → **Project Settings → API Keys** → **Publishable** key (`sb_publishable_…`) → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- **Legacy:** **Legacy API Keys** tab → **anon** JWT → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (still supported; migrate when ready).
 
-## Excel File Format
+The app reads **publishable first**, then falls back to **anon** (`src/lib/supabase/env.ts`).
 
-Your Excel file should contain columns with route information. The application will automatically detect columns with names like:
-- Service Day / Day
-- Service Tech / Tech / Technician
-- Cycle Frequency / Frequency / Cycle
+3. Restart the dev server after changing env.
 
-Any other columns will be displayed in the preview and printed output.
+**Code layout**
 
-## Printing
+- `src/lib/supabase/env.ts` — URL + public key resolution.
+- `src/lib/supabase/client.ts` — `createClient()` for **Client Components** (browser).
+- `src/lib/supabase/server.ts` — `createClient()` for **Server Components**, Route Handlers, Server Actions.
+- `middleware.ts` — refreshes the auth session cookie on each request.
 
-After exporting, the HTML file will open in your default browser. Use your browser's print function (Ctrl+P) to print the route sheet.
+Use the [Supabase Next.js guide](https://supabase.com/docs/guides/auth/server-side/nextjs) for sign-in, RLS, and policies.
+
+### Auth (email / password)
+
+1. In Supabase: **Authentication → Providers → Email** — enable if needed.
+2. **Authentication → URL Configuration**:
+   - **Site URL:** `http://localhost:3000` (add your production URL when you deploy).
+   - **Redirect URLs:** include `http://localhost:3000/auth/callback` (and production callback URL later).
+
+**Routes:** `/login` (sign in / sign up), `/auth/callback` (email confirm & OAuth PKCE), `/dashboard` (protected). Middleware redirects unauthenticated users away from `/dashboard`.
+
+**If you see “Sign-in link expired or invalid”** after clicking the email:
+
+1. **Redirect URLs** — In Supabase: **Authentication → URL Configuration → Redirect URLs**, add:
+   - `http://localhost:3000/auth/callback`
+   - `http://localhost:3000/auth/confirm` (optional alias; forwards to callback)
+2. **PKCE vs email link** — `exchangeCodeForSession(code)` only works in the **same browser** where you started sign-up (PKCE cookie). Opening the link in another app/browser often fails. The callback route also supports **`token_hash` + `type`** via `verifyOtp`, which works everywhere.
+3. **Confirm sign-up email template** — **Authentication → Email Templates → Confirm sign up**. Point the button at your app with `token_hash`, for example:
+
+   ```html
+   <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup&next=/dashboard">Confirm your email</a>
+   ```
+
+   Use `type=recovery` for password reset, etc., per [email templates](https://supabase.com/docs/guides/auth/auth-email-templates).
+4. **Corporate email** — Some providers prefetch links (e.g. Microsoft Safe Links) and burn the token; try another inbox or OTP flow from the same docs page.
+
+## Development
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Build
+
+```bash
+npm run build
+npm start
+```
+
+## Legacy desktop app
+
+The previous Python/Tkinter Windows app lives in [`deprecated/`](deprecated/).
