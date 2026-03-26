@@ -58,7 +58,7 @@ export function EditCustomerForm({
 
   useEffect(() => {
     if (state?.ok) {
-      router.refresh();
+      router.push("/dashboard/demand");
     }
   }, [state, router]);
 
