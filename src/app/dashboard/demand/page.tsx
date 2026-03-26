@@ -12,6 +12,12 @@ import { isDemandExcelImportCompleted } from "@/lib/demand/excel-import-metadata
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+function uniqueNonEmpty(values: (string | null)[]): string[] {
+  return [...new Set(values.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 export default async function DemandPage() {
   const supabase = await createClient();
   const {
@@ -39,10 +45,16 @@ export default async function DemandPage() {
       .order("sort_order", { ascending: true }),
     supabase
       .from("customers")
-      .select("id, account_name")
+      .select("id, account_name, service_day, service_frequency, service_tech")
       .eq("user_id", user.id)
       .order("account_name", { ascending: true }),
   ]);
+
+  const serviceDayOptions = uniqueNonEmpty((customers ?? []).map((c) => c.service_day));
+  const serviceFrequencyOptions = uniqueNonEmpty(
+    (customers ?? []).map((c) => c.service_frequency),
+  );
+  const serviceTechOptions = uniqueNonEmpty((customers ?? []).map((c) => c.service_tech));
 
   return (
     <main className="mx-auto max-w-3xl p-8">
@@ -70,19 +82,18 @@ export default async function DemandPage() {
         <SignOutButton />
       </div>
 
-      <section className="mt-10 rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
-        <h2 className="text-lg font-medium text-neutral-200">
-          {excelImportDone ? "Re-import Excel" : "Import Excel"}
-        </h2>
-        <p className="mt-2 text-sm text-neutral-500">
-          First row must include Account, Service Day, Service Frequency, Service Tech, then one
-          column per chemical. Use “Replace all…” for a full reload from a template file.
-          {excelImportDone ? " (You can re-import at any time.)" : ""}
-        </p>
-        <div className="mt-4">
-          <DemandImportForm />
-        </div>
-      </section>
+      {!excelImportDone && (
+        <section className="mt-10 rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+          <h2 className="text-lg font-medium text-neutral-200">Import Excel</h2>
+          <p className="mt-2 text-sm text-neutral-500">
+            First row must include Account, Service Day, Service Frequency, Service Tech, then one
+            column per chemical. Use “Replace all…” for a full reload from a template file.
+          </p>
+          <div className="mt-4">
+            <DemandImportForm />
+          </div>
+        </section>
+      )}
 
       <div className="mt-10 grid gap-8 sm:grid-cols-2">
         <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
@@ -91,7 +102,12 @@ export default async function DemandPage() {
             Add an account and optionally choose chemicals and quantities.
           </p>
           <div className="mt-4">
-            <AddCustomerForm chemicals={chemicals ?? []} />
+            <AddCustomerForm
+              chemicals={chemicals ?? []}
+              serviceDayOptions={serviceDayOptions}
+              serviceFrequencyOptions={serviceFrequencyOptions}
+              serviceTechOptions={serviceTechOptions}
+            />
           </div>
         </section>
         <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
@@ -154,6 +170,17 @@ export default async function DemandPage() {
           </ul>
         )}
       </section>
+      {excelImportDone && (
+        <section className="mt-10 rounded-lg border border-red-900/40 bg-neutral-950/50 p-6">
+          <h2 className="text-lg font-medium text-neutral-200">Danger zone</h2>
+          <p className="mt-2 text-sm text-neutral-500">
+            Re-importing can overwrite existing demand data when you choose Replace all.
+          </p>
+          <div className="mt-4">
+            <DemandImportForm />
+          </div>
+        </section>
+      )}
     </main>
   );
 }

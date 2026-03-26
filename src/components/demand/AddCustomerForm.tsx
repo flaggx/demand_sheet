@@ -27,7 +27,17 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-export function AddCustomerForm({ chemicals }: { chemicals: ChemicalOption[] }) {
+export function AddCustomerForm({
+  chemicals,
+  serviceDayOptions,
+  serviceFrequencyOptions,
+  serviceTechOptions,
+}: {
+  chemicals: ChemicalOption[];
+  serviceDayOptions: readonly string[];
+  serviceFrequencyOptions: readonly string[];
+  serviceTechOptions: readonly string[];
+}) {
   const router = useRouter();
   const [state, action] = useActionState(addCustomerAction, null as CrudResult | null);
 
@@ -51,9 +61,13 @@ export function AddCustomerForm({ chemicals }: { chemicals: ChemicalOption[] }) 
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <ServiceDaySelect id="add_service_day" defaultValue={null} />
-        <ServiceFrequencySelect id="add_service_frequency" defaultValue={null} />
-        <ServiceTechSelect id="add_service_tech" defaultValue={null} />
+        <ServiceDaySelect id="add_service_day" defaultValue={null} options={serviceDayOptions} />
+        <ServiceFrequencySelect
+          id="add_service_frequency"
+          defaultValue={null}
+          options={serviceFrequencyOptions}
+        />
+        <ServiceTechSelect id="add_service_tech" defaultValue={null} options={serviceTechOptions} />
       </div>
       <div>
         <p className="text-xs font-medium text-neutral-500">Chemicals in use</p>

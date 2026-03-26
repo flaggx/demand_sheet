@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+function uniqueNonEmpty(values: (string | null)[]): string[] {
+  return [...new Set(values.map((v) => (v ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -20,10 +26,11 @@ export default async function EditCustomerPage({ params }: Props) {
     redirect("/login");
   }
 
-  const [{ data: customer }, { data: chemicals }, { data: usageRows }] = await Promise.all([
+  const [{ data: customer }, { data: chemicals }, { data: usageRows }, { data: serviceRows }] =
+    await Promise.all([
     supabase
       .from("customers")
-      .select("id, account_name")
+      .select("id, account_name, service_day, service_frequency, service_tech")
       .eq("id", customerId)
       .eq("user_id", user.id)
       .maybeSingle(),
@@ -36,7 +43,11 @@ export default async function EditCustomerPage({ params }: Props) {
       .from("customer_chemicals")
       .select("chemical_id, quantity")
       .eq("customer_id", customerId),
-  ]);
+    supabase
+      .from("customers")
+      .select("service_day, service_frequency, service_tech")
+      .eq("user_id", user.id),
+    ]);
 
   if (!customer) {
     notFound();
@@ -46,6 +57,11 @@ export default async function EditCustomerPage({ params }: Props) {
   for (const row of usageRows ?? []) {
     initialSelections[row.chemical_id] = row.quantity;
   }
+  const serviceDayOptions = uniqueNonEmpty((serviceRows ?? []).map((row) => row.service_day));
+  const serviceFrequencyOptions = uniqueNonEmpty(
+    (serviceRows ?? []).map((row) => row.service_frequency),
+  );
+  const serviceTechOptions = uniqueNonEmpty((serviceRows ?? []).map((row) => row.service_tech));
 
   return (
     <main className="mx-auto max-w-xl p-8">
@@ -61,6 +77,12 @@ export default async function EditCustomerPage({ params }: Props) {
         <EditCustomerForm
           customerId={customer.id}
           accountName={customer.account_name}
+          serviceDay={customer.service_day}
+          serviceFrequency={customer.service_frequency}
+          serviceTech={customer.service_tech}
+          serviceDayOptions={serviceDayOptions}
+          serviceFrequencyOptions={serviceFrequencyOptions}
+          serviceTechOptions={serviceTechOptions}
           chemicals={chemicals ?? []}
           initialSelections={initialSelections}
         />

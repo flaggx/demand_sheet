@@ -30,6 +30,12 @@ function SubmitButton({ label }: { label: string }) {
 export type EditCustomerFormProps = {
   customerId: string;
   accountName: string;
+  serviceDay: string | null;
+  serviceFrequency: string | null;
+  serviceTech: string | null;
+  serviceDayOptions: readonly string[];
+  serviceFrequencyOptions: readonly string[];
+  serviceTechOptions: readonly string[];
   chemicals: ChemicalOption[];
   /** chemical id → quantity for chemicals this customer uses */
   initialSelections: Record<string, number | null>;
@@ -38,6 +44,12 @@ export type EditCustomerFormProps = {
 export function EditCustomerForm({
   customerId,
   accountName,
+  serviceDay,
+  serviceFrequency,
+  serviceTech,
+  serviceDayOptions,
+  serviceFrequencyOptions,
+  serviceTechOptions,
   chemicals,
   initialSelections,
 }: EditCustomerFormProps) {
@@ -67,17 +79,29 @@ export function EditCustomerForm({
       </div>
       <div>
         <p className="text-xs text-neutral-500">
-          Service day, frequency, and tech start blank — choose each before saving.
+          Service values are pre-filled from the customer row; update as needed.
         </p>
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
-          <ServiceDaySelect id="edit_service_day" defaultValue={null} required />
-          <ServiceFrequencySelect
-            id="edit_service_frequency"
-            defaultValue={null}
-            label="Service frequency"
+          <ServiceDaySelect
+            id="edit_service_day"
+            defaultValue={serviceDay}
+            options={serviceDayOptions}
             required
           />
-          <ServiceTechSelect id="edit_service_tech" defaultValue={null} label="Service tech" required />
+          <ServiceFrequencySelect
+            id="edit_service_frequency"
+            defaultValue={serviceFrequency}
+            label="Service frequency"
+            options={serviceFrequencyOptions}
+            required
+          />
+          <ServiceTechSelect
+            id="edit_service_tech"
+            defaultValue={serviceTech}
+            label="Service tech"
+            options={serviceTechOptions}
+            required
+          />
         </div>
       </div>
       <div>

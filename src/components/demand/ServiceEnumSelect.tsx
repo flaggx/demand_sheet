@@ -16,6 +16,10 @@ type BaseProps = {
   required?: boolean;
 };
 
+type OptionOverrideProps = {
+  options?: readonly string[];
+};
+
 function buildAllowedSet(options: readonly string[]) {
   return new Set(options);
 }
@@ -71,38 +75,44 @@ function ServiceEnumSelect({
   );
 }
 
-export function ServiceDaySelect(props: BaseProps & { id: string; label?: string }) {
-  const { label: labelProp, ...rest } = props;
+export function ServiceDaySelect(
+  props: BaseProps & { id: string; label?: string } & OptionOverrideProps,
+) {
+  const { label: labelProp, options = SERVICE_DAY_OPTIONS, ...rest } = props;
   return (
     <ServiceEnumSelect
       {...rest}
       name="service_day"
       label={labelProp ?? "Service day"}
-      options={SERVICE_DAY_OPTIONS}
+      options={options}
     />
   );
 }
 
-export function ServiceFrequencySelect(props: BaseProps & { id: string; label?: string }) {
-  const { label: labelProp, ...rest } = props;
+export function ServiceFrequencySelect(
+  props: BaseProps & { id: string; label?: string } & OptionOverrideProps,
+) {
+  const { label: labelProp, options = SERVICE_FREQUENCY_OPTIONS, ...rest } = props;
   return (
     <ServiceEnumSelect
       {...rest}
       name="service_frequency"
       label={labelProp ?? "Frequency"}
-      options={SERVICE_FREQUENCY_OPTIONS}
+      options={options}
     />
   );
 }
 
-export function ServiceTechSelect(props: BaseProps & { id: string; label?: string }) {
-  const { label: labelProp, ...rest } = props;
+export function ServiceTechSelect(
+  props: BaseProps & { id: string; label?: string } & OptionOverrideProps,
+) {
+  const { label: labelProp, options = SERVICE_TECH_OPTIONS, ...rest } = props;
   return (
     <ServiceEnumSelect
       {...rest}
       name="service_tech"
       label={labelProp ?? "Tech"}
-      options={SERVICE_TECH_OPTIONS}
+      options={options}
     />
   );
 }
