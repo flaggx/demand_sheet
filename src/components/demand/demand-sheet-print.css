@@ -1,0 +1,203 @@
+/* Scoped to demand sheet page — screen preview + print (landscape, monochrome) */
+.demand-sheet-print-root {
+  color: #000;
+  background: #fafafa;
+}
+
+.demand-sheet-print-root .sheet-paper {
+  margin: 0 auto;
+  max-width: 100%;
+  padding: 1rem 1.25rem 2rem;
+  background: #fff;
+  border: 1px solid #ccc;
+}
+
+@media screen {
+  .demand-sheet-print-root .sheet-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin: -1rem -1.25rem 1rem;
+    padding: 0.75rem 1rem;
+    background: #252526;
+    border-bottom: 1px solid #3c3c3c;
+  }
+}
+
+@media print {
+  @page {
+    size: letter landscape;
+    margin: 0.3in;
+  }
+
+  .demand-sheet-print-root {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .demand-sheet-print-root .no-print {
+    display: none !important;
+  }
+
+  .demand-sheet-print-root .sheet-paper {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+
+  .demand-sheet-print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .demand-sheet-print-root .sheet-header {
+    margin-bottom: 10px !important;
+    padding-bottom: 5px !important;
+    border-bottom: 3px solid #000 !important;
+  }
+
+  .demand-sheet-print-root .sheet-header h1 {
+    font-size: 18px !important;
+  }
+
+  .demand-sheet-print-root .sheet-header-meta {
+    font-size: 11px !important;
+  }
+
+  .demand-sheet-print-root .sheet-filters {
+    background-color: #fff !important;
+    border: 2px solid #000 !important;
+    padding: 8px !important;
+    margin-bottom: 10px !important;
+    font-size: 11px !important;
+    border-radius: 0 !important;
+  }
+
+  .demand-sheet-print-root .sheet-table-wrap {
+    overflow: visible !important;
+  }
+
+  .demand-sheet-print-root table {
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 9px !important;
+    page-break-inside: auto;
+    border-collapse: collapse;
+  }
+
+  .demand-sheet-print-root th {
+    background-color: #e0e0e0 !important;
+    color: #000 !important;
+    border: 1px solid #000 !important;
+    padding: 6px 4px !important;
+    font-size: 9px !important;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  .demand-sheet-print-root td {
+    padding: 4px !important;
+    font-size: 9px !important;
+    border: 1px solid #000 !important;
+    word-wrap: break-word;
+  }
+
+  .demand-sheet-print-root tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .demand-sheet-print-root tbody tr:nth-child(even) {
+    background-color: #f5f5f5 !important;
+  }
+
+  .demand-sheet-print-root .sheet-summary {
+    background-color: #fff !important;
+    border: 2px solid #000 !important;
+    border-left: 4px solid #000 !important;
+    padding: 8px !important;
+    margin-top: 10px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* Screen table (non-print): readable on light paper */
+.demand-sheet-print-root .sheet-table-wrap {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.demand-sheet-print-root table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  font-size: 12px;
+}
+
+.demand-sheet-print-root th {
+  background: #e0e0e0;
+  color: #000;
+  padding: 8px 6px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #000;
+}
+
+.demand-sheet-print-root td {
+  padding: 6px;
+  border: 1px solid #666;
+  color: #000;
+}
+
+.demand-sheet-print-root tbody tr:nth-child(even) {
+  background: #f5f5f5;
+}
+
+.demand-sheet-print-root .sheet-header {
+  border-bottom: 3px solid #000;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.demand-sheet-print-root .sheet-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.demand-sheet-print-root .sheet-header-meta {
+  margin-top: 8px;
+  font-size: 0.875rem;
+}
+
+.demand-sheet-print-root .sheet-filters {
+  background: #f5f5f5;
+  padding: 10px;
+  margin-bottom: 16px;
+  border: 2px solid #666;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.demand-sheet-print-root .sheet-filters strong {
+  margin-right: 8px;
+}
+
+.demand-sheet-print-root .sheet-summary {
+  margin-top: 16px;
+  padding: 10px;
+  background: #fff;
+  border: 2px solid #000;
+  border-left: 4px solid #000;
+  font-size: 13px;
+}
+
+.demand-sheet-print-root .sheet-hint {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: #fff8e6;
+  border: 1px solid #e6b800;
+  border-radius: 4px;
+  font-size: 12px;
+}
