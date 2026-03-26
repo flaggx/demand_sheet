@@ -20,7 +20,7 @@ function SubmitButton({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-neutral-700 px-3 py-1.5 text-sm text-neutral-100 hover:bg-neutral-600 disabled:opacity-50"
+      className="rounded-md bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900 disabled:opacity-50"
     >
       {pending ? "Saving…" : label}
     </button>
@@ -50,14 +50,14 @@ export function AddCustomerForm({
   return (
     <form action={action} className="space-y-3">
       <div>
-        <label htmlFor="account_name" className="text-xs text-neutral-500">
+        <label htmlFor="account_name" className="text-xs text-neutral-200">
           Account name
         </label>
         <input
           id="account_name"
           name="account_name"
           required
-          className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200"
+          className="mt-1 w-full rounded border border-neutral-500 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -70,8 +70,8 @@ export function AddCustomerForm({
         <ServiceTechSelect id="add_service_tech" defaultValue={null} options={serviceTechOptions} />
       </div>
       <div>
-        <p className="text-xs font-medium text-neutral-500">Chemicals in use</p>
-        <p className="mt-1 text-xs text-neutral-600">
+        <p className="text-xs font-medium text-neutral-200">Chemicals in use</p>
+        <p className="mt-1 text-xs text-neutral-300">
           Optional: check chemicals this account uses and enter quantities.
         </p>
         <div className="mt-2">

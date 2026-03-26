@@ -24,8 +24,8 @@ export function CustomerChemicalsEditor({ chemicals, initialSelections = {} }: P
   }
 
   return (
-    <div className="max-h-64 space-y-2 overflow-y-auto rounded border border-neutral-800 bg-neutral-950/80 p-3">
-      <p className="text-xs font-medium text-neutral-500">Chemicals in use</p>
+    <div className="max-h-64 space-y-2 overflow-y-auto rounded border border-neutral-700 bg-neutral-900/80 p-3">
+      <p className="text-xs font-medium text-neutral-200">Chemicals in use</p>
       <ul className="space-y-2">
         {chemicals.map((c) => {
           const used = c.id in initialSelections;
@@ -33,7 +33,7 @@ export function CustomerChemicalsEditor({ chemicals, initialSelections = {} }: P
           return (
             <li
               key={c.id}
-              className="flex flex-wrap items-center gap-2 text-sm text-neutral-300"
+              className="flex flex-wrap items-center gap-2 text-sm text-neutral-100"
             >
               <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                 <input
@@ -53,7 +53,7 @@ export function CustomerChemicalsEditor({ chemicals, initialSelections = {} }: P
                 step="any"
                 placeholder="Qty"
                 defaultValue={qty === undefined || qty === null ? "" : String(qty)}
-                className="w-24 shrink-0 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
+                className="w-24 shrink-0 rounded border border-neutral-500 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
               />
             </li>
           );

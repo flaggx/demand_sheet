@@ -46,13 +46,13 @@ export function DeleteCustomerButton({
         {redirectAfter ? <input type="hidden" name="redirect_after" value="1" /> : null}
         <button
           type="submit"
-          className="text-sm text-red-400 hover:text-red-300 hover:underline disabled:opacity-50"
+          className="rounded-sm text-sm text-red-300 hover:text-red-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-50"
         >
           Delete
         </button>
       </form>
       {state?.ok === false && (
-        <span className="max-w-[12rem] text-right text-xs text-red-400">{state.error}</span>
+        <span className="max-w-[12rem] text-right text-xs text-red-300">{state.error}</span>
       )}
     </div>
   );
@@ -92,13 +92,13 @@ export function DeleteChemicalButton({
         <input type="hidden" name="chemical_id" value={chemicalId} />
         <button
           type="submit"
-          className="text-sm text-red-400 hover:text-red-300 hover:underline disabled:opacity-50"
+          className="rounded-sm text-sm text-red-300 hover:text-red-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-50"
         >
           Delete
         </button>
       </form>
       {state?.ok === false && (
-        <span className="max-w-[12rem] text-right text-xs text-red-400">{state.error}</span>
+        <span className="max-w-[12rem] text-right text-xs text-red-300">{state.error}</span>
       )}
     </div>
   );

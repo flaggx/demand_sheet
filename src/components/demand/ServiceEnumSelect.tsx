@@ -5,7 +5,7 @@ import {
 } from "@/lib/demand/service-options";
 
 const selectCls =
-  "mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200";
+  "mt-1 w-full rounded border border-neutral-500 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900";
 
 type BaseProps = {
   id: string;
@@ -46,12 +46,12 @@ function ServiceEnumSelect({
   const storedOutsideList =
     normalized !== "" && !allowed.has(normalized) ? normalized : null;
   const cls = compact
-    ? "mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-200"
+    ? "mt-1 w-full rounded border border-neutral-500 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
     : selectCls;
 
   return (
     <div>
-      <label htmlFor={id} className="text-xs text-neutral-500">
+      <label htmlFor={id} className="text-xs text-neutral-200">
         {label}
       </label>
       <select

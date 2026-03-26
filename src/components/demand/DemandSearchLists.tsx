@@ -39,13 +39,13 @@ export function DemandSearchLists({ customers, chemicals }: DemandSearchListsPro
 
   return (
     <>
-      <section className="mt-10 rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+      <section className="mt-10 rounded-lg border border-neutral-700 bg-neutral-900/70 p-6">
         <h2 className="text-lg font-medium text-neutral-200">Customers</h2>
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-neutral-300">
           Open a customer to edit service day, frequency, tech, and chemical quantities.
         </p>
         <div className="mt-4">
-          <label htmlFor="customer_search" className="text-xs text-neutral-500">
+          <label htmlFor="customer_search" className="text-xs text-neutral-200">
             Search customers
           </label>
           <input
@@ -53,23 +53,23 @@ export function DemandSearchLists({ customers, chemicals }: DemandSearchListsPro
             value={customerQuery}
             onChange={(e) => setCustomerQuery(e.target.value)}
             placeholder="Type account name..."
-            className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200"
+            className="mt-1 w-full rounded border border-neutral-500 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
           />
         </div>
         {customers.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">No customers yet.</p>
+          <p className="mt-4 text-sm text-neutral-300">No customers yet.</p>
         ) : filteredCustomers.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">No customers match your search.</p>
+          <p className="mt-4 text-sm text-neutral-300">No customers match your search.</p>
         ) : (
-          <ul className="mt-4 divide-y divide-neutral-800 rounded border border-neutral-800">
+          <ul className="mt-4 divide-y divide-neutral-700 rounded border border-neutral-700">
             {filteredCustomers.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-900/40"
+                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-800/70"
               >
                 <Link
                   href={`/dashboard/demand/customers/${c.id}`}
-                  className="min-w-0 flex-1 text-sm text-sky-400 hover:underline"
+                  className="min-w-0 flex-1 rounded-sm text-sm text-sky-300 hover:text-sky-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
                 >
                   {c.account_name}
                 </Link>
@@ -80,14 +80,14 @@ export function DemandSearchLists({ customers, chemicals }: DemandSearchListsPro
         )}
       </section>
 
-      <section className="mt-10 rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+      <section className="mt-10 rounded-lg border border-neutral-700 bg-neutral-900/70 p-6">
         <h2 className="text-lg font-medium text-neutral-200">Chemical catalog</h2>
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-neutral-300">
           Deleting a chemical removes it from the catalog and clears its quantities for every
           customer.
         </p>
         <div className="mt-4">
-          <label htmlFor="chemical_search" className="text-xs text-neutral-500">
+          <label htmlFor="chemical_search" className="text-xs text-neutral-200">
             Search chemicals
           </label>
           <input
@@ -95,19 +95,19 @@ export function DemandSearchLists({ customers, chemicals }: DemandSearchListsPro
             value={chemicalQuery}
             onChange={(e) => setChemicalQuery(e.target.value)}
             placeholder="Type chemical name..."
-            className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200"
+            className="mt-1 w-full rounded border border-neutral-500 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
           />
         </div>
         {chemicals.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">No chemicals yet.</p>
+          <p className="mt-4 text-sm text-neutral-300">No chemicals yet.</p>
         ) : filteredChemicals.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-600">No chemicals match your search.</p>
+          <p className="mt-4 text-sm text-neutral-300">No chemicals match your search.</p>
         ) : (
-          <ul className="mt-4 divide-y divide-neutral-800 rounded border border-neutral-800">
+          <ul className="mt-4 divide-y divide-neutral-700 rounded border border-neutral-700">
             {filteredChemicals.map((ch) => (
               <li
                 key={ch.id}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-900/40"
+                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-800/70"
               >
                 <span className="min-w-0 flex-1 text-sm text-neutral-200">{ch.name}</span>
                 <DeleteChemicalButton chemicalId={ch.id} chemicalName={ch.name} />

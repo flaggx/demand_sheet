@@ -58,19 +58,19 @@ export default async function DemandPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Demand</h1>
-          <p className="mt-2 text-sm text-neutral-400">
+          <p className="mt-2 text-sm text-neutral-200">
             {excelImportDone
               ? "Manage customers and chemicals below."
               : `Use Import Excel once (sheet “${DEMAND_EXCEL_MAIN_SHEET}”) to load your template, then add or edit records below.`}
           </p>
-          <p className="mt-3 text-sm text-neutral-500">
-            <span className="text-neutral-300">{customerCount ?? 0}</span> customers ·{" "}
-            <span className="text-neutral-300">{chemicalCount ?? 0}</span> chemicals
+          <p className="mt-3 text-sm text-neutral-300">
+            <span className="text-neutral-100">{customerCount ?? 0}</span> customers ·{" "}
+            <span className="text-neutral-100">{chemicalCount ?? 0}</span> chemicals
           </p>
           <p className="mt-4">
             <Link
               href="/dashboard/demand/sheet"
-              className="inline-flex rounded-md bg-neutral-200 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white"
+              className="inline-flex rounded-md bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
             >
               View demand sheet (print)
             </Link>
@@ -80,9 +80,9 @@ export default async function DemandPage() {
       </div>
 
       {!excelImportDone && (
-        <section className="mt-10 rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+        <section className="mt-10 rounded-lg border border-neutral-700 bg-neutral-900/70 p-6">
           <h2 className="text-lg font-medium text-neutral-200">Import Excel</h2>
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-2 text-sm text-neutral-300">
             First row must include Account, Service Day, Service Frequency, Service Tech, then one
             column per chemical. Use “Replace all…” for a full reload from a template file.
           </p>
@@ -93,9 +93,9 @@ export default async function DemandPage() {
       )}
 
       <div className="mt-10 grid gap-8 sm:grid-cols-2">
-        <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+        <section className="rounded-lg border border-neutral-700 bg-neutral-900/70 p-6">
           <h2 className="text-lg font-medium text-neutral-200">New customer</h2>
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-2 text-sm text-neutral-300">
             Add an account and optionally choose chemicals and quantities.
           </p>
           <div className="mt-4">
@@ -107,9 +107,9 @@ export default async function DemandPage() {
             />
           </div>
         </section>
-        <section className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-6">
+        <section className="rounded-lg border border-neutral-700 bg-neutral-900/70 p-6">
           <h2 className="text-lg font-medium text-neutral-200">New chemical</h2>
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-2 text-sm text-neutral-300">
             Adds a column to your catalog (sort order is appended).
           </p>
           <div className="mt-4">
@@ -120,9 +120,9 @@ export default async function DemandPage() {
 
       <DemandSearchLists customers={customers ?? []} chemicals={chemicals ?? []} />
       {excelImportDone && (
-        <section className="mt-10 rounded-lg border border-red-900/40 bg-neutral-950/50 p-6">
+        <section className="mt-10 rounded-lg border border-red-700/60 bg-neutral-900/70 p-6">
           <h2 className="text-lg font-medium text-neutral-200">Danger zone</h2>
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-2 text-sm text-neutral-200">
             Re-importing can overwrite existing demand data when you choose Replace all.
           </p>
           <div className="mt-4">
