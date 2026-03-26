@@ -65,6 +65,14 @@ export default async function EditCustomerPage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-xl p-8">
+      <p>
+        <Link
+          href="/dashboard/demand"
+          className="inline-flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800"
+        >
+          ← Back to demand data
+        </Link>
+      </p>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Edit customer</h1>
@@ -102,11 +110,6 @@ export default async function EditCustomerPage({ params }: Props) {
         </div>
       </section>
 
-      <p className="mt-8 text-sm text-neutral-500">
-        <Link href="/dashboard/demand" className="text-sky-400 hover:underline">
-          ← Demand data
-        </Link>
-      </p>
     </main>
   );
 }
